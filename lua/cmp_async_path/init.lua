@@ -1,13 +1,13 @@
-local cmp = require 'cmp'
+local cmp = require  'cmp'
 
 local NAME_REGEX = '\\%([^/\\\\:\\*?<>\'"`\\|]\\)'
-local PATH_REGEX = vim.regex(([[\%(\%(/PAT*[^/\\\\:\\*?<>\'"`\\| .~]\)\|\%(/\.\.\)\)*/\zePAT*$]]):gsub('PAT', NAME_REGEX))
+local PATH_REGEX = vim.regex(
+                     ([[\%(\%(/PAT*[^/\\\\:\\*?<>\'"`\\| .~]\)\|\%(/\.\.\)\)*/\zePAT*$]]):gsub(
+                       'PAT', NAME_REGEX))
 
 local source = {}
 
-local constants = {
-  max_lines = 20,
-}
+local constants = {max_lines = 20}
 
 ---@class cmp_path.Option
 ---@field public trailing_slash boolean
@@ -23,17 +23,11 @@ local defaults = {
   end,
 }
 
-source.new = function()
-  return setmetatable({}, { __index = source })
-end
+source.new = function() return setmetatable({}, {__index = source}) end
 
-source.get_trigger_characters = function()
-  return { '/', '.' }
-end
+source.get_trigger_characters = function() return {'/', '.'} end
 
-source.get_keyword_pattern = function(self, params)
-  return NAME_REGEX .. '*'
-end
+source.get_keyword_pattern = function(self, params) return NAME_REGEX .. '*' end
 
 source.complete = function(self, params, callback)
   local option = self:_validate_option(params)
@@ -43,7 +37,8 @@ source.complete = function(self, params, callback)
     return callback()
   end
 
-  local include_hidden = string.sub(params.context.cursor_before_line, params.offset, params.offset) == '.'
+  local include_hidden = string.sub(params.context.cursor_before_line,
+                                    params.offset, params.offset) == '.'
   self:_candidates(dirname, include_hidden, option, function(err, candidates)
     if err then
       return callback()
@@ -71,7 +66,8 @@ source._dirname = function(self, params, option)
     return nil
   end
 
-  local dirname = string.gsub(string.sub(params.context.cursor_before_line, s + 2), '%a*$', '') -- exclude '/'
+  local dirname = string.gsub(string.sub(params.context.cursor_before_line,
+                                         s + 2), '%a*$', '') -- exclude '/'
   local prefix = string.sub(params.context.cursor_before_line, 1, s + 1) -- include '/'
 
   local buf_dirname = option.get_cwd(params)
@@ -99,13 +95,15 @@ source._dirname = function(self, params, option)
     -- Ignore URL components
     accept = accept and not prefix:match('%a/$')
     -- Ignore URL scheme
-    accept = accept and not prefix:match('%a+:/$') and not prefix:match('%a+://$')
+    accept = accept and not prefix:match('%a+:/$') and
+               not prefix:match('%a+://$')
     -- Ignore HTML closing tags
     accept = accept and not prefix:match('</$')
     -- Ignore math calculation
     accept = accept and not prefix:match('[%d%)]%s*/$')
     -- Ignore / comment
-    accept = accept and (not prefix:match('^[%s/]*$') or not self:_is_slash_comment())
+    accept = accept and
+               (not prefix:match('^[%s/]*$') or not self:_is_slash_comment())
     if accept then
       return vim.fn.resolve('/' .. dirname)
     end
@@ -146,12 +144,7 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
       filterText = name,
       insertText = name,
       kind = cmp.lsp.CompletionItemKind.File,
-      data = {
-        path = path,
-        type = fs_type,
-        stat = stat,
-        lstat = lstat,
-      },
+      data = {path = path, type = fs_type, stat = stat, lstat = lstat},
     }
     if fs_type == 'directory' then
       item.kind = cmp.lsp.CompletionItemKind.Folder
@@ -195,9 +188,9 @@ end
 source._validate_option = function(_, params)
   local option = vim.tbl_deep_extend('keep', params.option, defaults)
   vim.validate({
-    trailing_slash = { option.trailing_slash, 'boolean' },
-    label_trailing_slash = { option.label_trailing_slash, 'boolean' },
-    get_cwd = { option.get_cwd, 'function' },
+    trailing_slash = {option.trailing_slash, 'boolean'},
+    label_trailing_slash = {option.label_trailing_slash, 'boolean'},
+    get_cwd = {option.get_cwd, 'function'},
   })
   return option
 end
@@ -206,7 +199,7 @@ source._get_documentation = function(_, filename, count)
   local binary = assert(io.open(filename, 'rb'))
   local first_kb = binary:read(1024)
   if first_kb:find('\0') then
-    return { kind = cmp.lsp.MarkupKind.PlainText, value = 'binary file' }
+    return {kind = cmp.lsp.MarkupKind.PlainText, value = 'binary file'}
   end
 
   local contents = {}
@@ -217,14 +210,20 @@ source._get_documentation = function(_, filename, count)
     end
   end
 
-  local filetype = vim.filetype.match({ filename = filename })
+  local filetype = vim.filetype.match({filename = filename})
   if not filetype then
-    return { kind = cmp.lsp.MarkupKind.PlainText, value = table.concat(contents, '\n') }
+    return {
+      kind = cmp.lsp.MarkupKind.PlainText,
+      value = table.concat(contents, '\n'),
+    }
   end
 
   table.insert(contents, 1, '```' .. filetype)
   table.insert(contents, '```')
-  return { kind = cmp.lsp.MarkupKind.Markdown, value = table.concat(contents, '\n') }
+  return {
+    kind = cmp.lsp.MarkupKind.Markdown,
+    value = table.concat(contents, '\n'),
+  }
 end
 
 return source

@@ -1,9 +1,8 @@
 local cmp = require  'cmp'
-
 local NAME_REGEX = '\\%([^/\\\\:\\*?<>\'"`\\|]\\)'
-local PATH_REGEX = vim.regex(
-                     ([[\%(\%(/PAT*[^/\\\\:\\*?<>\'"`\\| .~]\)\|\%(/\.\.\)\)*/\zePAT*$]]):gsub(
-                       'PAT', NAME_REGEX))
+local PATH_REGEX = assert(vim.regex(
+                            ([[\%(\%(/PAT*[^/\\\\:\\*?<>\'"`\\| .~]\)\|\%(/\.\.\)\)*/\zePAT*$]]):gsub(
+                              'PAT', NAME_REGEX)))
 
 local source = {}
 
@@ -12,7 +11,7 @@ local constants = {max_lines = 20}
 ---@class cmp_path.Option
 ---@field public trailing_slash boolean
 ---@field public label_trailing_slash boolean
----@field public get_cwd fun(): string
+---@field public get_cwd fun(table): string
 
 ---@type cmp_path.Option
 local defaults = {
@@ -27,7 +26,7 @@ source.new = function() return setmetatable({}, {__index = source}) end
 
 source.get_trigger_characters = function() return {'/', '.'} end
 
-source.get_keyword_pattern = function(self, params) return NAME_REGEX .. '*' end
+source.get_keyword_pattern = function(_, _) return NAME_REGEX .. '*' end
 
 source.complete = function(self, params, callback)
   local option = self:_validate_option(params)

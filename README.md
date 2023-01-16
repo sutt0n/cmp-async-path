@@ -48,3 +48,7 @@ Specify if directory names in the completion menu should include a trailing slas
 _Default:_ returns the current working directory of the current buffer
 
 Specifies the base directory for relative paths.
+
+## luatexts
+
+Lua source code for luatexts was embedded. Code originally comes from https://github.com/agladysh/luatexts/

@@ -111,67 +111,88 @@ source._dirname = function(self, params, option)
 end
 
 source._candidates = function(_, dirname, include_hidden, option, callback)
-  local fs, err = vim.loop.fs_scandir(dirname)
+  local entries, err = vim.loop.fs_scandir(dirname)
   if err then
     return callback(err, nil)
   end
 
-  local items = {}
+  local work
+  work = assert(vim.loop.new_work(function(_entries, _dirname,
+                                           label_trailing_slash, trailing_slash,
+                                           file_kind, folder_kind)
+    local items = {}
 
-  local function create_item(name, fs_type)
-    if not (include_hidden or string.sub(name, 1, 1) ~= '.') then
-      return
-    end
-
-    local path = dirname .. '/' .. name
-    local stat = vim.loop.fs_stat(path)
-    local lstat = nil
-    if stat then
-      fs_type = stat.type
-    elseif fs_type == 'link' then
-      -- Broken symlink
-      lstat = vim.loop.fs_lstat(dirname)
-      if not lstat then
+    local function create_item(name, fs_type)
+      if not (include_hidden or string.sub(name, 1, 1) ~= '.') then
         return
       end
-    else
+
+      local path = _dirname .. '/' .. name
+      local stat = assert(vim.loop.fs_stat)(path)
+      local lstat = nil
+      if stat then
+        fs_type = stat.type
+      elseif fs_type == 'link' then
+        -- Broken symlink
+        lstat = assert(vim.loop.fs_lstat)(_dirname)
+        if not lstat then
+          return
+        end
+      else
+        return
+      end
+
+      local item = {
+        label = name,
+        filterText = name,
+        insertText = name,
+        kind = file_kind,
+        data = {path = path, type = fs_type, stat = stat, lstat = lstat},
+      }
+      if fs_type == 'directory' then
+        item.kind = folder_kind
+        if label_trailing_slash then
+          item.label = name .. '/'
+        else
+          item.label = name
+        end
+        item.insertText = name .. '/'
+        if not trailing_slash then
+          item.word = name
+        end
+      end
+
+      table.insert(items, item)
+    end
+
+    while true do
+      local name, fs_type, e = assert(vim.loop.fs_scandir_next)(_entries)
+      if e then
+        return fs_type, ""
+      end
+      if not name then
+        break
+      end
+      create_item(name, fs_type)
+    end
+
+    return nil, require'utils.luatexts'.save(items)
+  end, function(worker_error, serialized_items)
+    if worker_error then
+      callback(err, nil)
       return
     end
-
-    local item = {
-      label = name,
-      filterText = name,
-      insertText = name,
-      kind = cmp.lsp.CompletionItemKind.File,
-      data = {path = path, type = fs_type, stat = stat, lstat = lstat},
-    }
-    if fs_type == 'directory' then
-      item.kind = cmp.lsp.CompletionItemKind.Folder
-      if option.label_trailing_slash then
-        item.label = name .. '/'
-      else
-        item.label = name
-      end
-      item.insertText = name .. '/'
-      if not option.trailing_slash then
-        item.word = name
-      end
+    local read_ok, items = require'utils.luatexts'.load(serialized_items)
+    if not read_ok then
+      callback("Problem de-serializing file entries", nil)
     end
-    table.insert(items, item)
-  end
+    callback(nil, items)
+  end))
 
-  while true do
-    local name, fs_type, e = vim.loop.fs_scandir_next(fs)
-    if e then
-      return callback(fs_type, nil)
-    end
-    if not name then
-      break
-    end
-    create_item(name, fs_type)
-  end
+  work:queue(entries, dirname, option.label_trailing_slash,
+             option.trailing_slash, cmp.lsp.CompletionItemKind.File,
+             cmp.lsp.CompletionItemKind.Folder)
 
-  callback(nil, items)
 end
 
 source._is_slash_comment = function(_)

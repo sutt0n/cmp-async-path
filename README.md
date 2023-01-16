@@ -1,13 +1,15 @@
-# cmp-path
+# cmp-async-path
 
-nvim-cmp source for filesystem paths.
+nvim-cmp source for filesystem paths with async processing (neovim won't block while reading from disk).
+
+forked from https://github.com/hrsh7th/cmp-path/
 
 # Setup
 
 ```lua
 require'cmp'.setup {
   sources = {
-    { name = 'path' }
+    { name = 'async_path' }
   }
 }
 ```
@@ -21,7 +23,7 @@ The below source configuration options are available. To set any of these option
 cmp.setup({
   sources = {
     {
-      name = 'path',
+      name = 'async_path',
       option = {
         -- Options go into this table
       },

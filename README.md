@@ -1,3 +1,5 @@
+https://codeberg.org/FelipeLema/cmp-async-path
+
 # cmp-async-path
 
 nvim-cmp source for filesystem paths with async processing (neovim won't block while reading from disk).

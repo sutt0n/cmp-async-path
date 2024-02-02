@@ -176,13 +176,13 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
       create_item(name, fs_type)
     end
 
-    return nil, require'utils.luatexts'.save(items)
+    return nil, vim.json.encode(items)
   end, function(worker_error, serialized_items)
     if worker_error then
       callback(err, nil)
       return
     end
-    local read_ok, items = require'utils.luatexts'.load(serialized_items)
+    local read_ok, items = pcall(vim.json.decode, serialized_items, { luanil = { object = true, array = true } })
     if not read_ok then
       callback("Problem de-serializing file entries", nil)
     end

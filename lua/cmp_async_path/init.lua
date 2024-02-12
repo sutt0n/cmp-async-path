@@ -117,13 +117,13 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
   end
 
   local work
-  work = assert(vim.loop.new_work(function(_entries, _dirname,
+  work = assert(vim.loop.new_work(function(_entries, _dirname, _include_hidden,
                                            label_trailing_slash, trailing_slash,
                                            file_kind, folder_kind)
     local items = {}
 
     local function create_item(name, fs_type)
-      if not (include_hidden or string.sub(name, 1, 1) ~= '.') then
+      if not (_include_hidden or string.sub(name, 1, 1) ~= '.') then
         return
       end
 
@@ -189,7 +189,7 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
     callback(nil, items)
   end))
 
-  work:queue(entries, dirname, option.label_trailing_slash,
+  work:queue(entries, dirname, include_hidden, option.label_trailing_slash,
              option.trailing_slash, cmp.lsp.CompletionItemKind.File,
              cmp.lsp.CompletionItemKind.Folder)
 

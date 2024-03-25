@@ -1,7 +1,6 @@
 [*.lua]
 
-indent_width = 2
-
+indent_size = 2
 #--no-use-tab
 indent_style = space
 tab_width = 2

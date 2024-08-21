@@ -113,13 +113,13 @@ source._dirname = function(self, params, option)
 end
 
 source._candidates = function(_, dirname, include_hidden, option, callback)
-  local entries, err = vim.loop.fs_scandir(dirname)
+  local entries, err = vim.uv.fs_scandir(dirname)
   if err then
     return callback(err, nil)
   end
 
   local work
-  work = assert(vim.loop.new_work(
+  work = assert(vim.uv.new_work(
     function(_entries, _dirname, _include_hidden,
              label_trailing_slash, trailing_slash,
              file_kind, folder_kind)
@@ -131,13 +131,13 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
         end
 
         local path = _dirname .. '/' .. name
-        local stat = assert(vim.loop.fs_stat)(path)
+        local stat = assert(vim.uv.fs_stat)(path)
         local lstat = nil
         if stat then
           fs_type = stat.type
         elseif fs_type == 'link' then
           -- Broken symlink
-          lstat = assert(vim.loop.fs_lstat)(_dirname)
+          lstat = assert(vim.uv.fs_lstat)(_dirname)
           if not lstat then
             return
           end
@@ -169,7 +169,7 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
       end
 
       while true do
-        local name, fs_type, e = assert(vim.loop.fs_scandir_next)(_entries)
+        local name, fs_type, e = assert(vim.uv.fs_scandir_next)(_entries)
         if e then
           return fs_type, ""
         end

@@ -48,17 +48,83 @@ source.complete = function(self, params, callback)
   end)
 end
 
-source.resolve = function(self, completion_item, callback)
+--- get documentation in separate thread
+---@param _ any
+---@param completion_item lsp.CompletionItem
+---@param callback fun(completion_item: lsp.CompletionItem|nil)
+source.resolve = function(_, completion_item, callback)
   local data = completion_item.data
-  if data.stat and data.stat.type == 'file' then
-    local ok, documentation = pcall(function()
-      return self:_get_documentation(data.path, constants.max_lines)
-    end)
-    if ok then
-      completion_item.documentation = documentation
-    end
+  ---@diagnostic disable-next-line: undefined-field
+  if not data.stat or data.stat.type ~= 'file' then
+    -- return right away with no changes / no added docs
+    callback(completion_item)
+    return
   end
-  callback(completion_item)
+
+  local work
+  work = assert(vim.uv.new_work(
+  --- Read file in thread
+  ---@param filepath string
+  ---@param count number max line count (-1 if no max)
+  ---@return string|nil, string serialized table
+    function(filepath, count)
+      local ok, binary = pcall(io.open, filepath, 'rb')
+      if not ok or binary == nil then
+        return string.format("Error opening %s", filepath), ""
+      end
+      local first_kb = binary:read(1024)
+      if first_kb:find('\0') then
+        return nil, vim.json.encode({kind = "binary"})
+      end
+
+      local contents = {}
+      for content in first_kb:gmatch("[^\r\n]+") do
+        table.insert(contents, content)
+        if count > -1 and #contents >= count then
+          break
+        end
+      end
+      return nil, vim.json.encode({contents = contents})
+    end,
+    --- deserialize doc and call callback
+    ---@param serialized_fileinfo string
+    function(worker_error, serialized_fileinfo)
+      if worker_error then
+        error(string.format("Worker error while fetching file doc: %s", worker_error))
+      end
+
+      local read_ok, file_info = pcall(vim.json.decode, serialized_fileinfo, {luanil = {object = true, array = true}})
+      if not read_ok then
+        error(string.format("Unexpected problem de-serializing item info: «%s»",
+          serialized_fileinfo))
+      end
+      if file_info.kind == "binary" then
+        completion_item.documentation = {
+          kind = cmp.lsp.MarkupKind.PlainText,
+          value = 'binary file',
+        }
+      else
+        local contents = file_info.contents
+        local filetype = vim.filetype.match({contents = contents})
+        if not filetype then
+          completion_item.documentation = {
+            kind = cmp.lsp.MarkupKind.PlainText,
+            value = table.concat(contents, '\n'),
+          }
+        else
+          table.insert(contents, 1, '```' .. filetype)
+          table.insert(contents, '```')
+          completion_item.documentation = {
+            kind = cmp.lsp.MarkupKind.Markdown,
+            value = table.concat(contents, '\n'),
+          }
+        end
+      end
+
+      callback(completion_item)
+    end
+  ))
+  work:queue(data.path, constants.max_lines or -1, cmp.lsp.MarkupKind.Markdown)
 end
 
 source._dirname = function(self, params, option)
@@ -218,35 +284,5 @@ source._validate_option = function(_, params)
   return option
 end
 
-source._get_documentation = function(_, filename, count)
-  local binary = assert(io.open(filename, 'rb'))
-  local first_kb = binary:read(1024)
-  if first_kb:find('\0') then
-    return {kind = cmp.lsp.MarkupKind.PlainText, value = 'binary file'}
-  end
-
-  local contents = {}
-  for content in first_kb:gmatch("[^\r\n]+") do
-    table.insert(contents, content)
-    if count ~= nil and #contents >= count then
-      break
-    end
-  end
-
-  local filetype = vim.filetype.match({filename = filename})
-  if not filetype then
-    return {
-      kind = cmp.lsp.MarkupKind.PlainText,
-      value = table.concat(contents, '\n'),
-    }
-  end
-
-  table.insert(contents, 1, '```' .. filetype)
-  table.insert(contents, '```')
-  return {
-    kind = cmp.lsp.MarkupKind.Markdown,
-    value = table.concat(contents, '\n'),
-  }
-end
 
 return source

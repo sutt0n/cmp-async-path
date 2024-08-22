@@ -66,14 +66,16 @@ source.resolve = function(_, completion_item, callback)
   --- Read file in thread
   ---@param filepath string
   ---@param count number max line count (-1 if no max)
-  ---@return string|nil, string serialized table
+  ---@return string|nil, string (error, serialized_table) either some error or the serialized table
     function(filepath, count)
       local ok, binary = pcall(io.open, filepath, 'rb')
       if not ok or binary == nil then
+        ---@diagnostic disable-next-line: redundant-return-value
         return string.format("Error opening %s", filepath), ""
       end
       local first_kb = binary:read(1024)
       if first_kb:find('\0') then
+        ---@diagnostic disable-next-line: redundant-return-value
         return nil, vim.json.encode({kind = "binary"})
       end
 
@@ -84,9 +86,10 @@ source.resolve = function(_, completion_item, callback)
           break
         end
       end
+      ---@diagnostic disable-next-line: redundant-return-value
       return nil, vim.json.encode({contents = contents})
     end,
-    --- deserialize doc and call callback
+    --- deserialize doc and call callback(…)
     ---@param serialized_fileinfo string
     function(worker_error, serialized_fileinfo)
       if worker_error then
@@ -186,6 +189,15 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
 
   local work
   work = assert(vim.uv.new_work(
+  --- create path entries
+  ---@param _entries uv_fs_t
+  ---@param _dirname any see vim.fn.resolve()
+  ---@param _include_hidden boolean
+  ---@param label_trailing_slash boolean
+  ---@param trailing_slash boolean
+  ---@param file_kind table<string,number> see cmp.lsp.CompletionItemKind.Filee
+  ---@param folder_kind table<string,number> see cmp.lsp.CompletionItemKind.Folder
+  ---@return string|nil, string (error, serialized_results) "error text", nil or nil, "serialized items"
     function(_entries, _dirname, _include_hidden,
              label_trailing_slash, trailing_slash,
              file_kind, folder_kind)
@@ -237,6 +249,7 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
       while true do
         local name, fs_type, e = assert(vim.uv.fs_scandir_next)(_entries)
         if e then
+          ---@diagnostic disable-next-line: redundant-return-value
           return fs_type, ""
         end
         if not name then
@@ -245,8 +258,13 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
         create_item(name, fs_type)
       end
 
+      ---@diagnostic disable-next-line: redundant-return-value
       return nil, vim.json.encode(items)
-    end, function(worker_error, serialized_items)
+    end,
+    ---
+    ---@param worker_error string|nil non-nil if some error happened in worker
+    ---@param serialized_items string array-of-items serialized as string
+    function(worker_error, serialized_items)
       if worker_error then
         callback(err, nil)
         return

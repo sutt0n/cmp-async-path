@@ -71,12 +71,15 @@ source.resolve = function(_, completion_item, callback)
       local ok, binary = pcall(io.open, filepath, 'rb')
       if not ok or binary == nil then
         ---@diagnostic disable-next-line: redundant-return-value
-        return string.format("Error opening %s", filepath), ""
+        return nil, vim.json.encode({
+          kind = "binary",
+          contents = "« cannot read this file »"
+        })
       end
       local first_kb = binary:read(1024)
       if first_kb:find('\0') then
         ---@diagnostic disable-next-line: redundant-return-value
-        return nil, vim.json.encode({kind = "binary"})
+        return nil, vim.json.encode({kind = "binary", contents = 'binary file'})
       end
 
       local contents = {}
@@ -104,7 +107,7 @@ source.resolve = function(_, completion_item, callback)
       if file_info.kind == "binary" then
         completion_item.documentation = {
           kind = cmp.lsp.MarkupKind.PlainText,
-          value = 'binary file',
+          value = file_info.contents,
         }
       else
         local contents = file_info.contents

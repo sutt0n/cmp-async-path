@@ -30,7 +30,9 @@ source.get_trigger_characters = function() return {'/', '.'} end
 
 source.get_keyword_pattern = function(_, _) return NAME_REGEX .. '*' end
 
-source.complete = function(self, params, callback)
+---@param params cmp.SourceCompletionApiParams
+---@param callback fun(response: lsp.CompletionResponse|nil)
+function source:complete(params, callback)
   local option = self:_validate_option(params)
 
   local dirname = self:_dirname(params, option)
@@ -40,19 +42,21 @@ source.complete = function(self, params, callback)
 
   local include_hidden = option.show_hidden_files_by_default or
     string.sub(params.context.cursor_before_line, params.offset, params.offset) == '.'
-  self:_candidates(dirname, include_hidden, option, function(err, candidates)
-    if err then
-      return callback()
-    end
-    callback(candidates)
-  end)
+  self:_candidates(dirname, include_hidden, option,
+    ---@param err nil|string
+    ---@param candidates lsp.CompletionResponse|nil
+    function(err, candidates)
+      if err then
+        return callback()
+      end
+      callback(candidates)
+    end)
 end
 
 --- get documentation in separate thread
----@param _ any
 ---@param completion_item lsp.CompletionItem
 ---@param callback fun(completion_item: lsp.CompletionItem|nil)
-source.resolve = function(_, completion_item, callback)
+function source:resolve(completion_item, callback)
   local data = completion_item.data
   ---@diagnostic disable-next-line: undefined-field
   if not data.stat or data.stat.type ~= 'file' then
@@ -138,7 +142,11 @@ source.resolve = function(_, completion_item, callback)
   work:queue(data.path, constants.max_lines or -1, cmp.lsp.MarkupKind.Markdown)
 end
 
-source._dirname = function(self, params, option)
+--- Try to match a path before cursor and return its dirname
+--- Try to work around non-literal paths, like resolving env vars
+---@param params cmp.SourceCompletionApiParams
+---@param option cmp_path.Option
+function source:_dirname(params, option)
   local s = PATH_REGEX:match_str(params.context.cursor_before_line)
   if not s then
     return nil
@@ -181,7 +189,7 @@ source._dirname = function(self, params, option)
     accept = accept and not prefix:match('[%d%)]%s*/$')
     -- Ignore / comment
     accept = accept and
-      (not prefix:match('^[%s/]*$') or not self:_is_slash_comment())
+      (not prefix:match('^[%s/]*$') or not self:_is_slash_comment_p())
     if accept then
       return vim.fn.resolve('/' .. dirname)
     end
@@ -189,7 +197,12 @@ source._dirname = function(self, params, option)
   return nil
 end
 
-source._candidates = function(_, dirname, include_hidden, option, callback)
+--- call cmp's callback(entries) after retrieving entries in a separate thread
+---@param dirname string
+---@param include_hidden boolean
+---@param option cmp_path.Option
+---@param callback function(err:nil|string, candidates:lsp.CompletionResponse|nil)
+function source:_candidates(dirname, include_hidden, option, callback)
   local entries, err = vim.uv.fs_scandir(dirname)
   if err then
     return callback(err, nil)
@@ -197,9 +210,10 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
 
   local work
   work = assert(vim.uv.new_work(
-  --- create path entries
+  --- Collect path entries, serialize them and return them
+  --- This function is called in a separate thread, so errors are caught and serialized
   ---@param _entries uv_fs_t
-  ---@param _dirname any see vim.fn.resolve()
+  ---@param _dirname string see vim.fn.resolve()
   ---@param _include_hidden boolean
   ---@param label_trailing_slash boolean
   ---@param trailing_slash boolean
@@ -269,8 +283,9 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
       ---@diagnostic disable-next-line: redundant-return-value
       return nil, vim.json.encode(items)
     end,
-    ---
-    ---@param worker_error string|nil non-nil if some error happened in worker
+    --- Receive serialiazed entries, deserialize them, call callback(entries)
+    --- This function is called in the main thread
+    ---@param worker_error string|nil non-nil if some error happened in worker thread
     ---@param serialized_items string array-of-items serialized as string
     function(worker_error, serialized_items)
       if worker_error then
@@ -289,7 +304,8 @@ source._candidates = function(_, dirname, include_hidden, option, callback)
     cmp.lsp.CompletionItemKind.Folder)
 end
 
-source._is_slash_comment = function(_)
+--- using «/» as comment in current buffer?
+function source:_is_slash_comment_p()
   local commentstring = vim.bo.commentstring or ''
   local no_filetype = vim.bo.filetype == ''
   local is_slash_comment = false
@@ -298,9 +314,10 @@ source._is_slash_comment = function(_)
   return is_slash_comment and not no_filetype
 end
 
+---@param params cmp.SourceCompletionApiParams
 ---@return cmp_path.Option
-source._validate_option = function(_, params)
-  local option = vim.tbl_deep_extend('keep', params.option, defaults)
+function source:_validate_option(params)
+  local option = assert(vim.tbl_deep_extend('keep', params.option, defaults))
   vim.validate({
     trailing_slash = {option.trailing_slash, 'boolean'},
     label_trailing_slash = {option.label_trailing_slash, 'boolean'},
@@ -309,6 +326,5 @@ source._validate_option = function(_, params)
   })
   return option
 end
-
 
 return source

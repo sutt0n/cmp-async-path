@@ -77,6 +77,11 @@ source.resolve = function(_, completion_item, callback)
         })
       end
       local first_kb = binary:read(1024)
+      if first_kb == nil or first_kb == "" then
+        ---@diagnostic disable-next-line: redundant-return-value
+        return nil, vim.json.encode({kind = 'binary', contents = '« empty file »'})
+      end
+
       if first_kb:find('\0') then
         ---@diagnostic disable-next-line: redundant-return-value
         return nil, vim.json.encode({kind = "binary", contents = 'binary file'})
